@@ -1,0 +1,99 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+def read_data(filename):
+    #Reads the csv file and turns it into a pandas data frame
+    csv = pd.read_csv(filename)
+    d = pd.DataFrame(csv)
+    return d
+
+def plot_data_with_error(df,T,wavelength,graph_together,graph_absorbtion_lines):
+    #Creates figure and axis
+    fig, ax1 = plt.subplots(figsize=(15,5))
+    ax2 = ax1.twinx()
+    X = df['wavelength(nm)']
+    Y = df['flux']
+
+    #Absorbtion Lines
+    if graph_absorbtion_lines==True:
+        #Hydrogen
+        ax1.vlines(x = [410,434,486],ymin=0,ymax=2*10**(-16), color = 'purple', label = 'Hydrogen absorbtion lines')
+        #Helium
+        ax1.vlines(x = [388,447,501],ymin=0,ymax=2*10**(-16), color = 'green', label = 'Helium absorbtion lines')
+        
+    #Flux with error
+    if graph_together == False:
+        ax1.errorbar(X, Y,yerr=df.flux_error,ecolor='red',label='Flux')
+        #Wavelength Vline
+        if wavelength != 0:
+            ax1.axvline(x = wavelength, color = 'black', label = 'max - wavelength')
+        #Labels
+        ax1.set_xlabel("Wavelength(nm)")
+        ax1.set_ylabel("Flux")
+        ax1.set_title("Flux vs Wavelength(nm)")
+        lines, labels = ax1.get_legend_handles_labels()
+        ax1.legend()
+        return
+        
+    #Constants
+    #Plank's
+    h = 6.62*10**(-34)
+    #Boltzman
+    k = 1.38*10**(-23)
+    #Speed of light
+    c = 3*10**8
+
+    #Spectral Radiance calculation
+    B = []
+    for i in range(len(X)):
+        B.append(((2*h*c**2)/((X[i]*10**(-9))**5*(np.exp((h*c)/((X[i]*10**(-9))*k*T))-1))))
+
+    #Flux and Spectral Radiance
+    ax1.errorbar(X, Y,yerr=df.flux_error,ecolor='red',label='Flux')
+    ax2.plot(X, B, color='green',label='Spectral Radiance')
+    #Wavelength Vline
+    ax1.axvline(x = wavelength, color = 'black', label = 'max - wavelength')
+    #Labels
+    ax1.set_xlabel("Wavelength(nm)")
+    ax1.set_ylabel("Flux")
+    ax2.set_ylabel("Spectral Radiance")
+    ax1.set_title("Flux and Spectral Radiance vs Wavelength(nm)")
+    lines, labels = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax2.legend(lines + lines2, labels + labels2, loc=0)
+
+def spectral_resolution(df):
+    #Calculates the average spectral resolution of the data
+    X = df['wavelength(nm)']
+    median_wavelength = X.loc[X.idxmax()]-X.loc[X.idxmin()]
+    delta = 0
+    for i in range(len(X)-1):
+        delta += np.abs(X[i]-X[i+1])
+    delta = delta/len(X)
+    R1 = median_wavelength/delta
+    print("Average Resolution: " + str(np.round(R1*1000)/1000))
+
+def get_max_absorbtion_wavelength(df):
+    #Finds the approximate wavelength where the flux would be at a max
+    X = df['wavelength(nm)'] 
+    df_guess_low = df.iloc[(X-510).abs().argsort()[:1]]['wavelength(nm)'].tolist()[0]
+    df_guess_high = df.iloc[(X-540).abs().argsort()[:1]]['wavelength(nm)'].tolist()[0]
+    sample_data = df.loc[(X >= df_guess_low) & (X <= df_guess_high)]
+    local_max = sample_data.loc[sample_data['flux'].idxmax()]['wavelength(nm)']
+    return local_max
+
+def Main(filename):
+    #Runs all functions and prints information
+    d = read_data(filename)
+    w_max = get_max_absorbtion_wavelength(d)
+    T = (3*10**(-3))/(w_max*10**(-9))
+    plot_data_with_error(d, T, w_max, False, False)
+    plot_data_with_error(d, T, 0, False, True)
+    plot_data_with_error(d, T, w_max, True, False)
+    print("Maximum wavelength: " + str(w_max))
+    print("Temperature:" + str(T))
+    spectral_resolution(d)
+
+filename = 'gaia2.csv'
+Main(filename)
